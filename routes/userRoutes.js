@@ -2,37 +2,49 @@
 import express from "express";
 import User from "../models/userModel.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { updateUser } from "../controllers/userController.js";
 
 
 const router = express.Router();
 
-// e'lonni saqlanganlarga qo'shish
+router.put("/update", protect, updateUser);
+router.post("/update", protect, updateUser);
+
+
+
+// e'lonni saqlanganlarga qo'shish (atomik yangilanish)
 router.post("/save-elon/:elonId", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
     const elonId = req.params.elonId;
 
-    if (!user.savedElons.includes(elonId)) {
-      user.savedElons.push(elonId);
-      await user.save();
-    }
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $addToSet: { savedElons: elonId } },
+      { new: true }
+    );
 
-    res.status(200).json({ message: "E'lon saqlandi", savedElons: user.savedElons });
+    if (!updatedUser) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+
+    res.status(200).json({ message: "E'lon saqlandi", savedElons: updatedUser.savedElons });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// e'lonni saqlanganlardan o'chirish
+// e'lonni saqlanganlardan o'chirish (atomik yangilanish)
 router.delete("/save-elon/:elonId", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
     const elonId = req.params.elonId;
 
-    user.savedElons = user.savedElons.filter(id => id.toString() !== elonId);
-    await user.save();
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $pull: { savedElons: elonId } },
+      { new: true }
+    );
 
-    res.status(200).json({ message: "E'lon saqlanganlardan o'chirildi", savedElons: user.savedElons });
+    if (!updatedUser) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+
+    res.status(200).json({ message: "E'lon saqlanganlardan o'chirildi", savedElons: updatedUser.savedElons });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -41,11 +53,13 @@ router.delete("/save-elon/:elonId", protect, async (req, res) => {
 // foydalanuvchining barcha saqlangan e'lonlari
 router.get("/saved-elons", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).populate("savedElons");
+    const user = await User.findById(req.user._id).populate("savedElons");
+    if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
     res.status(200).json(user.savedElons);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 export default router;
